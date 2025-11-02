@@ -535,6 +535,10 @@ Return ONLY valid JSON, no markdown or extra text:
     let data;
 
     try {
+      console.log('Calling HuggingFace API...');
+      console.log('Model:', 'meta-llama/Llama-4-Scout-17B-16E-Instruct:groq');
+      console.log('Prompt length:', prompt.length);
+
       response = await fetch('https://router.huggingface.co/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -555,6 +559,8 @@ Return ONLY valid JSON, no markdown or extra text:
         })
       });
 
+      console.log('HuggingFace response status:', response.status, response.statusText);
+
       if (!response.ok) {
         const errorText = await response.text();
         console.log(`HuggingFace API error (${response.status}):`, errorText.substring(0, 500));
@@ -562,10 +568,11 @@ Return ONLY valid JSON, no markdown or extra text:
       }
 
       data = await response.json();
-      console.log('HuggingFace response received successfully');
+      console.log('HuggingFace response received successfully, data keys:', Object.keys(data));
     } catch (fetchError) {
-      console.log('HuggingFace fetch error:', fetchError);
-      return c.json({ error: `Failed to call HuggingFace API: ${String(fetchError)}` }, 500);
+      const fetchErrorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      console.log('HuggingFace fetch error:', fetchErrorMsg);
+      return c.json({ error: `Failed to call HuggingFace API: ${fetchErrorMsg}` }, 500);
     }
 
     let generatedContent;
