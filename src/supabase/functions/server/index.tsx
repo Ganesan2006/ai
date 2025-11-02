@@ -555,13 +555,19 @@ Return ONLY valid JSON, no markdown or extra text:
       })
     });
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.log('HuggingFace API error:', error);
-      return c.json({ error: `HuggingFace API error: ${error}` }, 500);
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      console.log('Failed to parse HuggingFace response:', parseError);
+      return c.json({ error: `Failed to parse HuggingFace response: ${String(parseError)}` }, 500);
     }
 
-    const data = await response.json();
+    if (!response.ok) {
+      console.log('HuggingFace API error:', data);
+      return c.json({ error: `HuggingFace API error: ${data.error || 'Unknown error'}` }, 500);
+    }
+
     console.log('HuggingFace response received');
 
     let generatedContent;
