@@ -495,12 +495,63 @@ app.post("/make-server-2ba89cfc/generate-topic-content", async (c) => {
     }
 
     const hfToken = Deno.env.get('HF_TOKEN');
+    console.log('HF_TOKEN configured:', !!hfToken);
+
     if (!hfToken) {
-      console.log('HuggingFace API key not configured');
-      return c.json({
-        error: "HuggingFace API key not configured. Please add HF_TOKEN to environment variables.",
-        content: null
-      }, 500);
+      console.log('HuggingFace API key not configured, using fallback content generation');
+
+      // Use fallback content if API key is not configured
+      const content = {
+        explanation: `Understanding ${topic}: ${topic} is an important concept in ${moduleTitle}. This topic helps you develop skills for becoming a ${targetGoal}. ${topic} involves several key aspects that are essential for professional development.`,
+        keyPoints: [
+          `Master the fundamentals of ${topic}`,
+          `Understand practical applications of ${topic}`,
+          `Learn best practices for working with ${topic}`,
+          `Explore real-world examples of ${topic}`,
+          `Practice implementing ${topic} solutions`,
+          `Understand common challenges in ${topic}`,
+          `Develop problem-solving skills with ${topic}`
+        ],
+        applications: [
+          `${topic} in professional development`,
+          `Real-world use cases of ${topic}`,
+          `${topic} in industry applications`,
+          `Practical implementation of ${topic}`,
+          `Career applications using ${topic}`
+        ],
+        pitfalls: [
+          'Not understanding the fundamentals before advancing',
+          'Rushing through practical exercises',
+          'Not practicing enough with real-world scenarios',
+          'Ignoring edge cases and error handling'
+        ],
+        practiceIdeas: [
+          `Build a project using ${topic}`,
+          `Practice implementing ${topic} from scratch`,
+          `Solve coding challenges related to ${topic}`,
+          `Create a tutorial for ${topic}`,
+          `Contribute to open-source ${topic} projects`
+        ],
+        youtubeSearchQueries: [
+          `${topic} tutorial for beginners`,
+          `${topic} explained step by step`,
+          `${topic} advanced concepts`,
+          `${topic} in ${moduleTitle}`,
+          `how to master ${topic} for ${targetGoal}`
+        ],
+        topic,
+        moduleId,
+        moduleTitle,
+        difficulty,
+        generatedAt: new Date().toISOString(),
+        usingFallback: true
+      };
+
+      // Cache the fallback content
+      await kv.set(contentKey, content);
+      console.log('Fallback content cached successfully at:', contentKey);
+
+      return c.json({ content });
     }
 
     console.log('Calling HuggingFace API with Llama-4 to generate content...');
