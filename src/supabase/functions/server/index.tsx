@@ -498,69 +498,92 @@ app.post("/make-server-2ba89cfc/generate-topic-content", async (c) => {
       return c.json({ content: existingContent });
     }
 
-    const openAiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openAiKey) {
-      console.log('OpenAI API key not configured');
-      return c.json({ 
-        error: "OpenAI API key not configured. Please add OPENAI_API_KEY to Supabase secrets.",
-        content: null 
+    const hfToken = Deno.env.get('HF_TOKEN');
+    if (!hfToken) {
+      console.log('HuggingFace API key not configured');
+      return c.json({
+        error: "HuggingFace API key not configured. Please add HF_TOKEN to environment variables.",
+        content: null
       }, 500);
     }
 
-    console.log('Calling OpenAI API to generate content...');
+    console.log('Calling HuggingFace API with Llama-4 to generate content...');
 
     // Generate comprehensive topic content
-    const prompt = `Generate comprehensive learning content for the following topic:
+    const prompt = `You are an expert educator. Generate comprehensive learning content for the following topic in valid JSON format.
 
 Topic: ${topic}
 Module: ${moduleTitle}
 Difficulty: ${difficulty}
 Target Career: ${targetGoal}
 
-Provide:
-1. A detailed explanation of the concept (200-300 words)
-2. Key learning points (5-7 bullet points)
-3. Real-world applications and examples
-4. Common pitfalls to avoid
-5. Practice suggestions
-6. 3-5 specific YouTube video search queries that would help learn this topic (be very specific with technical terms)
+Provide the following fields in valid JSON:
+1. "explanation": A detailed explanation of the concept (200-300 words)
+2. "keyPoints": Array of 5-7 key learning points
+3. "applications": Array of real-world applications and examples
+4. "pitfalls": Array of common pitfalls to avoid
+5. "practiceIdeas": Array of practice suggestions
+6. "youtubeSearchQueries": Array of 3-5 specific YouTube video search queries for learning this topic (be very specific with technical terms)
 
-Format as JSON:
+Return ONLY valid JSON, no markdown or extra text:
 {
   "explanation": "detailed text",
-  "keyPoints": ["point 1", "point 2", ...],
-  "applications": ["app 1", "app 2", ...],
-  "pitfalls": ["pitfall 1", "pitfall 2", ...],
-  "practiceIdeas": ["idea 1", "idea 2", ...],
-  "youtubeSearchQueries": ["specific query 1", "specific query 2", ...]
+  "keyPoints": ["point 1", "point 2"],
+  "applications": ["app 1", "app 2"],
+  "pitfalls": ["pitfall 1", "pitfall 2"],
+  "practiceIdeas": ["idea 1", "idea 2"],
+  "youtubeSearchQueries": ["specific query 1", "specific query 2"]
 }`;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openAiKey}`
+        'Authorization': `Bearer ${hfToken}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'meta-llama/Llama-4-Scout-17B-16E-Instruct:groq',
         messages: [
-          { role: 'system', content: 'You are an expert educator creating comprehensive learning materials. Provide detailed, practical content in JSON format.' },
-          { role: 'user', content: prompt }
+          {
+            role: 'user',
+            content: prompt
+          }
         ],
         temperature: 0.7,
-        response_format: { type: "json_object" }
+        max_tokens: 2000,
+        stream: false
       })
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.log('OpenAI API error:', error);
-      return c.json({ error: `OpenAI API error: ${error}` }, 500);
+      console.log('HuggingFace API error:', error);
+      return c.json({ error: `HuggingFace API error: ${error}` }, 500);
     }
 
     const data = await response.json();
-    console.log('OpenAI response received');
-    const generatedContent = JSON.parse(data.choices[0].message.content);
+    console.log('HuggingFace response received');
+
+    let generatedContent;
+    try {
+      const content = data.choices[0].message.content;
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in response');
+      }
+      generatedContent = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.log('JSON parse error:', parseError);
+      const fallbackContent = data.choices[0].message.content;
+      generatedContent = {
+        explanation: fallbackContent,
+        keyPoints: [],
+        applications: [],
+        pitfalls: [],
+        practiceIdeas: [],
+        youtubeSearchQueries: [`${topic} tutorial`, `${topic} explained`, `${topic} ${targetGoal}`]
+      };
+    }
     console.log('Content parsed successfully');
 
     // Fetch YouTube videos for each search query
