@@ -568,25 +568,38 @@ Return ONLY valid JSON, no markdown or extra text:
       return c.json({ error: `Failed to call HuggingFace API: ${String(fetchError)}` }, 500);
     }
 
-    console.log('HuggingFace response received');
-
     let generatedContent;
     try {
+      if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+        console.log('Invalid HuggingFace response structure:', JSON.stringify(data).substring(0, 200));
+        throw new Error('Invalid response structure from HuggingFace');
+      }
+
       const content = data.choices[0].message.content;
+      console.log('HuggingFace content length:', content.length);
+
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error('No JSON found in response');
+        console.log('No JSON found in content, using fallback');
+        generatedContent = {
+          explanation: content,
+          keyPoints: [],
+          applications: [],
+          pitfalls: [],
+          practiceIdeas: [],
+          youtubeSearchQueries: [`${topic} tutorial`, `${topic} explained`, `${topic} ${targetGoal}`]
+        };
+      } else {
+        generatedContent = JSON.parse(jsonMatch[0]);
       }
-      generatedContent = JSON.parse(jsonMatch[0]);
     } catch (parseError) {
-      console.log('JSON parse error:', parseError);
-      const fallbackContent = data.choices[0].message.content;
+      console.log('Content parsing error:', parseError);
       generatedContent = {
-        explanation: fallbackContent,
-        keyPoints: [],
-        applications: [],
-        pitfalls: [],
-        practiceIdeas: [],
+        explanation: `Failed to generate detailed content. Topic: ${topic}`,
+        keyPoints: [`Learn about ${topic}`, `Practice ${topic}`, `Apply ${topic}`],
+        applications: [`Understanding ${topic}`],
+        pitfalls: ['Skipping fundamentals'],
+        practiceIdeas: [`Practice ${topic}`],
         youtubeSearchQueries: [`${topic} tutorial`, `${topic} explained`, `${topic} ${targetGoal}`]
       };
     }
