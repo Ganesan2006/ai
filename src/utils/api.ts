@@ -10,7 +10,7 @@ interface ApiOptions {
 
 async function apiCall(endpoint: string, options: ApiOptions = {}) {
   const { method = 'GET', body, token } = options;
-  
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token || publicAnonKey}`
@@ -25,14 +25,31 @@ async function apiCall(endpoint: string, options: ApiOptions = {}) {
     config.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, config);
-  const data = await response.json();
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, config);
+    const responseStatus = response.status;
+    const responseOk = response.ok;
 
-  if (!response.ok) {
-    throw new Error(data.error || 'API request failed');
+    let data = {};
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      console.warn(`Failed to parse JSON response for ${endpoint}:`, parseError);
+      if (!responseOk) {
+        throw new Error(`API request failed with status ${responseStatus}`);
+      }
+    }
+
+    if (!responseOk) {
+      const errorMsg = data?.error || data?.message || `API request failed with status ${responseStatus}`;
+      throw new Error(errorMsg);
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`API call error for ${endpoint}:`, error);
+    throw error;
   }
-
-  return data;
 }
 
 export const api = {

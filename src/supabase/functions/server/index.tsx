@@ -1,13 +1,9 @@
 import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
-import { logger } from "npm:hono/logger";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as kv from "./kv_store.tsx";
 
 const app = new Hono();
-
-// Enable logger
-app.use('*', logger(console.log));
 
 // Enable CORS for all routes and methods
 app.use(
@@ -498,69 +494,236 @@ app.post("/make-server-2ba89cfc/generate-topic-content", async (c) => {
       return c.json({ content: existingContent });
     }
 
-    const openAiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openAiKey) {
-      console.log('OpenAI API key not configured');
-      return c.json({ 
-        error: "OpenAI API key not configured. Please add OPENAI_API_KEY to Supabase secrets.",
-        content: null 
-      }, 500);
+    const hfToken = Deno.env.get('HF_TOKEN');
+    console.log('HF_TOKEN configured:', !!hfToken);
+
+    if (!hfToken) {
+      console.log('HuggingFace API key not configured, using fallback content generation');
+
+      // Use fallback content if API key is not configured
+      const content = {
+        explanation: `Understanding ${topic}: ${topic} is an important concept in ${moduleTitle}. This topic helps you develop skills for becoming a ${targetGoal}. ${topic} involves several key aspects that are essential for professional development.`,
+        keyPoints: [
+          `Master the fundamentals of ${topic}`,
+          `Understand practical applications of ${topic}`,
+          `Learn best practices for working with ${topic}`,
+          `Explore real-world examples of ${topic}`,
+          `Practice implementing ${topic} solutions`,
+          `Understand common challenges in ${topic}`,
+          `Develop problem-solving skills with ${topic}`
+        ],
+        applications: [
+          `${topic} in professional development`,
+          `Real-world use cases of ${topic}`,
+          `${topic} in industry applications`,
+          `Practical implementation of ${topic}`,
+          `Career applications using ${topic}`
+        ],
+        pitfalls: [
+          'Not understanding the fundamentals before advancing',
+          'Rushing through practical exercises',
+          'Not practicing enough with real-world scenarios',
+          'Ignoring edge cases and error handling'
+        ],
+        practiceIdeas: [
+          `Build a project using ${topic}`,
+          `Practice implementing ${topic} from scratch`,
+          `Solve coding challenges related to ${topic}`,
+          `Create a tutorial for ${topic}`,
+          `Contribute to open-source ${topic} projects`
+        ],
+        youtubeSearchQueries: [
+          `${topic} tutorial for beginners`,
+          `${topic} explained step by step`,
+          `${topic} advanced concepts`,
+          `${topic} in ${moduleTitle}`,
+          `how to master ${topic} for ${targetGoal}`
+        ],
+        topic,
+        moduleId,
+        moduleTitle,
+        difficulty,
+        generatedAt: new Date().toISOString(),
+        usingFallback: true
+      };
+
+      // Cache the fallback content
+      await kv.set(contentKey, content);
+      console.log('Fallback content cached successfully at:', contentKey);
+
+      return c.json({ content });
     }
 
-    console.log('Calling OpenAI API to generate content...');
+    console.log('Calling HuggingFace API with Llama-4 to generate content...');
 
     // Generate comprehensive topic content
-    const prompt = `Generate comprehensive learning content for the following topic:
+    const prompt = `You are an expert educator. Generate comprehensive learning content for the following topic in valid JSON format.
 
 Topic: ${topic}
 Module: ${moduleTitle}
 Difficulty: ${difficulty}
 Target Career: ${targetGoal}
 
-Provide:
-1. A detailed explanation of the concept (200-300 words)
-2. Key learning points (5-7 bullet points)
-3. Real-world applications and examples
-4. Common pitfalls to avoid
-5. Practice suggestions
-6. 3-5 specific YouTube video search queries that would help learn this topic (be very specific with technical terms)
+Provide the following fields in valid JSON:
+1. "explanation": A detailed explanation of the concept (200-300 words)
+2. "keyPoints": Array of 5-7 key learning points
+3. "applications": Array of real-world applications and examples
+4. "pitfalls": Array of common pitfalls to avoid
+5. "practiceIdeas": Array of practice suggestions
+6. "youtubeSearchQueries": Array of 3-5 specific YouTube video search queries for learning this topic (be very specific with technical terms)
 
-Format as JSON:
+Return ONLY valid JSON, no markdown or extra text:
 {
   "explanation": "detailed text",
-  "keyPoints": ["point 1", "point 2", ...],
-  "applications": ["app 1", "app 2", ...],
-  "pitfalls": ["pitfall 1", "pitfall 2", ...],
-  "practiceIdeas": ["idea 1", "idea 2", ...],
-  "youtubeSearchQueries": ["specific query 1", "specific query 2", ...]
+  "keyPoints": ["point 1", "point 2"],
+  "applications": ["app 1", "app 2"],
+  "pitfalls": ["pitfall 1", "pitfall 2"],
+  "practiceIdeas": ["idea 1", "idea 2"],
+  "youtubeSearchQueries": ["specific query 1", "specific query 2"]
 }`;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openAiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'You are an expert educator creating comprehensive learning materials. Provide detailed, practical content in JSON format.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        response_format: { type: "json_object" }
-      })
-    });
+    let response;
+    let data;
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.log('OpenAI API error:', error);
-      return c.json({ error: `OpenAI API error: ${error}` }, 500);
+    try {
+      console.log('Calling HuggingFace API...');
+      console.log('Model:', 'meta-llama/Llama-4-Scout-17B-16E-Instruct:groq');
+      console.log('Prompt length:', prompt.length);
+
+      response = await fetch('https://router.huggingface.co/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${hfToken}`
+        },
+        body: JSON.stringify({
+          model: 'meta-llama/Llama-4-Scout-17B-16E-Instruct:groq',
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 2000,
+          stream: false
+        })
+      });
+
+      console.log('HuggingFace response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`HuggingFace API error (${response.status}):`, errorText.substring(0, 500));
+        return c.json({ error: `HuggingFace API failed: ${response.status} ${response.statusText}` }, 500);
+      }
+
+      data = await response.json();
+      console.log('HuggingFace response received successfully, data keys:', Object.keys(data));
+    } catch (fetchError) {
+      const fetchErrorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      console.log('HuggingFace fetch error:', fetchErrorMsg);
+      console.log('Using fallback content generation...');
+
+      // Use fallback content if HuggingFace API fails
+      const content = {
+        explanation: `Understanding ${topic}: ${topic} is an important concept in ${moduleTitle}. This topic helps you develop skills for becoming a ${targetGoal}. ${topic} involves several key aspects that are essential for professional development.`,
+        keyPoints: [
+          `Master the fundamentals of ${topic}`,
+          `Understand practical applications of ${topic}`,
+          `Learn best practices for working with ${topic}`,
+          `Explore real-world examples of ${topic}`,
+          `Practice implementing ${topic} solutions`,
+          `Understand common challenges in ${topic}`,
+          `Develop problem-solving skills with ${topic}`
+        ],
+        applications: [
+          `${topic} in professional development`,
+          `Real-world use cases of ${topic}`,
+          `${topic} in industry applications`,
+          `Practical implementation of ${topic}`,
+          `Career applications using ${topic}`
+        ],
+        pitfalls: [
+          'Not understanding the fundamentals before advancing',
+          'Rushing through practical exercises',
+          'Not practicing enough with real-world scenarios',
+          'Ignoring edge cases and error handling'
+        ],
+        practiceIdeas: [
+          `Build a project using ${topic}`,
+          `Practice implementing ${topic} from scratch`,
+          `Solve coding challenges related to ${topic}`,
+          `Create a tutorial for ${topic}`,
+          `Contribute to open-source ${topic} projects`
+        ],
+        youtubeSearchQueries: [
+          `${topic} tutorial for beginners`,
+          `${topic} explained step by step`,
+          `${topic} advanced concepts`,
+          `${topic} in ${moduleTitle}`,
+          `how to master ${topic} for ${targetGoal}`
+        ],
+        topic,
+        moduleId,
+        moduleTitle,
+        difficulty,
+        generatedAt: new Date().toISOString(),
+        usingFallback: true
+      };
+
+      // Cache the fallback content
+      await kv.set(contentKey, content);
+      console.log('Fallback content cached successfully at:', contentKey);
+
+      return c.json({ content });
     }
 
-    const data = await response.json();
-    console.log('OpenAI response received');
-    const generatedContent = JSON.parse(data.choices[0].message.content);
+    let generatedContent;
+    try {
+      console.log('HuggingFace response keys:', Object.keys(data));
+      console.log('Response data:', JSON.stringify(data).substring(0, 300));
+
+      if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+        console.log('Invalid HuggingFace response: missing or empty choices array');
+        throw new Error('HuggingFace API returned empty choices array');
+      }
+
+      const choice = data.choices[0];
+      if (!choice.message || !choice.message.content) {
+        console.log('Invalid HuggingFace response: missing message.content in choice');
+        throw new Error('HuggingFace API response missing message.content');
+      }
+
+      const content = choice.message.content;
+      console.log('HuggingFace content length:', content.length, 'First 200 chars:', content.substring(0, 200));
+
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.log('No JSON found in content, using fallback');
+        generatedContent = {
+          explanation: content,
+          keyPoints: [],
+          applications: [],
+          pitfalls: [],
+          practiceIdeas: [],
+          youtubeSearchQueries: [`${topic} tutorial`, `${topic} explained`, `${topic} ${targetGoal}`]
+        };
+      } else {
+        generatedContent = JSON.parse(jsonMatch[0]);
+      }
+    } catch (parseError) {
+      const parseErrorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+      console.log('Content parsing error:', parseErrorMsg);
+      generatedContent = {
+        explanation: `Failed to generate detailed content. Topic: ${topic}`,
+        keyPoints: [`Learn about ${topic}`, `Practice ${topic}`, `Apply ${topic}`],
+        applications: [`Understanding ${topic}`],
+        pitfalls: ['Skipping fundamentals'],
+        practiceIdeas: [`Practice ${topic}`],
+        youtubeSearchQueries: [`${topic} tutorial`, `${topic} explained`, `${topic} ${targetGoal}`]
+      };
+    }
     console.log('Content parsed successfully');
 
     // Fetch YouTube videos for each search query
@@ -595,8 +758,14 @@ Format as JSON:
 
     return c.json({ content });
   } catch (error) {
-    console.log('Generate topic content error:', error);
-    return c.json({ error: `Error generating content: ${String(error)}` }, 500);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.log('Generate topic content error:', {
+      message: errorMessage,
+      stack: errorStack,
+      error: String(error)
+    });
+    return c.json({ error: `Error generating content: ${errorMessage}` }, 500);
   }
 });
 
