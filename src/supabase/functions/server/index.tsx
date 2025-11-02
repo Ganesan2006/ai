@@ -570,13 +570,22 @@ Return ONLY valid JSON, no markdown or extra text:
 
     let generatedContent;
     try {
-      if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
-        console.log('Invalid HuggingFace response structure:', JSON.stringify(data).substring(0, 200));
-        throw new Error('Invalid response structure from HuggingFace');
+      console.log('HuggingFace response keys:', Object.keys(data));
+      console.log('Response data:', JSON.stringify(data).substring(0, 300));
+
+      if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+        console.log('Invalid HuggingFace response: missing or empty choices array');
+        throw new Error('HuggingFace API returned empty choices array');
       }
 
-      const content = data.choices[0].message.content;
-      console.log('HuggingFace content length:', content.length);
+      const choice = data.choices[0];
+      if (!choice.message || !choice.message.content) {
+        console.log('Invalid HuggingFace response: missing message.content in choice');
+        throw new Error('HuggingFace API response missing message.content');
+      }
+
+      const content = choice.message.content;
+      console.log('HuggingFace content length:', content.length, 'First 200 chars:', content.substring(0, 200));
 
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
@@ -593,7 +602,8 @@ Return ONLY valid JSON, no markdown or extra text:
         generatedContent = JSON.parse(jsonMatch[0]);
       }
     } catch (parseError) {
-      console.log('Content parsing error:', parseError);
+      const parseErrorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+      console.log('Content parsing error:', parseErrorMsg);
       generatedContent = {
         explanation: `Failed to generate detailed content. Topic: ${topic}`,
         keyPoints: [`Learn about ${topic}`, `Practice ${topic}`, `Apply ${topic}`],
