@@ -28,7 +28,17 @@ async function apiCall(endpoint: string, options: ApiOptions = {}) {
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, config);
 
-    const responseText = await response.text();
+    let responseText = '';
+    try {
+      responseText = await response.text();
+    } catch (textError) {
+      console.error('Failed to read response text:', textError);
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+      return {};
+    }
+
     console.log('API Response status:', response.status, 'Text length:', responseText.length);
 
     let data;
