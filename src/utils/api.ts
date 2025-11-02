@@ -25,23 +25,29 @@ async function apiCall(endpoint: string, options: ApiOptions = {}) {
     config.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, config);
-
-  let data;
-
   try {
-    data = await response.json();
+    const response = await fetch(`${API_BASE}${endpoint}`, config);
+
+    const responseText = await response.text();
+    console.log('API Response status:', response.status, 'Text length:', responseText.length);
+
+    let data;
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch (parseError) {
+      console.error('Failed to parse JSON:', parseError, 'Response text:', responseText.substring(0, 200));
+      throw new Error(`Invalid JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || `API request failed with status ${response.status}`);
+    }
+
+    return data;
   } catch (error) {
-    console.error('Failed to parse JSON response:', error);
-    const statusError = `API request failed with status ${response.status}`;
-    throw new Error(statusError);
+    console.error('API call error:', error);
+    throw error;
   }
-
-  if (!response.ok) {
-    throw new Error(data.error || `API request failed with status ${response.status}`);
-  }
-
-  return data;
 }
 
 export const api = {
