@@ -531,37 +531,41 @@ Return ONLY valid JSON, no markdown or extra text:
   "youtubeSearchQueries": ["specific query 1", "specific query 2"]
 }`;
 
-    const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${hfToken}`
-      },
-      body: JSON.stringify({
-        model: 'meta-llama/Llama-4-Scout-17B-16E-Instruct:groq',
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000,
-        stream: false
-      })
-    });
-
+    let response;
     let data;
-    try {
-      data = await response.json();
-    } catch (parseError) {
-      console.log('Failed to parse HuggingFace response:', parseError);
-      return c.json({ error: `Failed to parse HuggingFace response: ${String(parseError)}` }, 500);
-    }
 
-    if (!response.ok) {
-      console.log('HuggingFace API error:', data);
-      return c.json({ error: `HuggingFace API error: ${data.error || 'Unknown error'}` }, 500);
+    try {
+      response = await fetch('https://router.huggingface.co/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${hfToken}`
+        },
+        body: JSON.stringify({
+          model: 'meta-llama/Llama-4-Scout-17B-16E-Instruct:groq',
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 2000,
+          stream: false
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`HuggingFace API error (${response.status}):`, errorText.substring(0, 500));
+        return c.json({ error: `HuggingFace API failed: ${response.status} ${response.statusText}` }, 500);
+      }
+
+      data = await response.json();
+      console.log('HuggingFace response received successfully');
+    } catch (fetchError) {
+      console.log('HuggingFace fetch error:', fetchError);
+      return c.json({ error: `Failed to call HuggingFace API: ${String(fetchError)}` }, 500);
     }
 
     console.log('HuggingFace response received');
