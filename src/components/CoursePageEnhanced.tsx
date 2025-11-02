@@ -77,23 +77,31 @@ export function CoursePageEnhanced({ module, accessToken, onBack, onComplete, in
   const handleTopicClick = async (topicIndex: number) => {
     const topic = topics[topicIndex];
     console.log('Topic clicked:', { topicIndex, topic, moduleId: module.id });
-    
+
     setSelectedTopicIndex(topicIndex);
     setActiveTab('content');
     setLoadingContent(true);
     setTopicContent(null);
 
     try {
-      console.log('Checking for cached content...');
+      let hasContent = false;
+
       // Try to get cached content first
-      const cachedData = await api.getTopicContent(module.id, topic, accessToken);
-      console.log('Cached data response:', cachedData);
-      
-      if (cachedData.content) {
-        console.log('Using cached content');
-        setTopicContent(cachedData.content);
-        setLoadingContent(false);
-      } else {
+      try {
+        console.log('Checking for cached content...');
+        const cachedData = await api.getTopicContent(module.id, topic, accessToken);
+        console.log('Cached data response:', cachedData);
+
+        if (cachedData.content) {
+          console.log('Using cached content');
+          setTopicContent(cachedData.content);
+          hasContent = true;
+        }
+      } catch (cacheError) {
+        console.log('Cache check failed, will generate new content:', cacheError);
+      }
+
+      if (!hasContent) {
         console.log('Generating new content with AI...');
         // Generate new content
         const requestData = {
@@ -104,7 +112,7 @@ export function CoursePageEnhanced({ module, accessToken, onBack, onComplete, in
           targetGoal: profile?.targetGoal || 'Technology Professional'
         };
         console.log('Request data:', requestData);
-        
+
         const data = await api.generateTopicContent(requestData, accessToken);
         console.log('Generated content response:', data);
 
