@@ -27,35 +27,27 @@ async function apiCall(endpoint: string, options: ApiOptions = {}) {
 
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, config);
+    const responseStatus = response.status;
+    const responseOk = response.ok;
 
-    let responseText = '';
+    let data = {};
     try {
-      responseText = await response.text();
-    } catch (textError) {
-      console.error('Failed to read response text:', textError);
-      if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
-      }
-      return {};
-    }
-
-    console.log('API Response status:', response.status, 'Text length:', responseText.length);
-
-    let data;
-    try {
-      data = responseText ? JSON.parse(responseText) : {};
+      data = await response.json();
     } catch (parseError) {
-      console.error('Failed to parse JSON:', parseError, 'Response text:', responseText.substring(0, 200));
-      throw new Error(`Invalid JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+      console.warn(`Failed to parse JSON response for ${endpoint}:`, parseError);
+      if (!responseOk) {
+        throw new Error(`API request failed with status ${responseStatus}`);
+      }
     }
 
-    if (!response.ok) {
-      throw new Error(data.error || `API request failed with status ${response.status}`);
+    if (!responseOk) {
+      const errorMsg = data?.error || data?.message || `API request failed with status ${responseStatus}`;
+      throw new Error(errorMsg);
     }
 
     return data;
   } catch (error) {
-    console.error('API call error:', error);
+    console.error(`API call error for ${endpoint}:`, error);
     throw error;
   }
 }
