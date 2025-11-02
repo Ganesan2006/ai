@@ -637,8 +637,14 @@ Return ONLY valid JSON, no markdown or extra text:
 
     return c.json({ content });
   } catch (error) {
-    console.log('Generate topic content error:', error);
-    return c.json({ error: `Error generating content: ${String(error)}` }, 500);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.log('Generate topic content error:', {
+      message: errorMessage,
+      stack: errorStack,
+      error: String(error)
+    });
+    return c.json({ error: `Error generating content: ${errorMessage}` }, 500);
   }
 });
 
