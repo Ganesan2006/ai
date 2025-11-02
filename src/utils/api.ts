@@ -28,14 +28,13 @@ async function apiCall(endpoint: string, options: ApiOptions = {}) {
   const response = await fetch(`${API_BASE}${endpoint}`, config);
 
   let data;
-  let responseText = '';
 
   try {
-    responseText = await response.text();
-    data = responseText ? JSON.parse(responseText) : {};
+    data = await response.json();
   } catch (error) {
-    console.error('Response text:', responseText);
-    throw new Error(`Failed to parse response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('Failed to parse JSON response:', error);
+    const statusError = `API request failed with status ${response.status}`;
+    throw new Error(statusError);
   }
 
   if (!response.ok) {
